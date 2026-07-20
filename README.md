@@ -61,8 +61,8 @@ Output goes to `<input-basename>.md` unless you pass `--out`.
 | `--timestamps` | off | Prefix each paragraph with `[mm:ss]`, offset to absolute time across chunks. |
 | `--speakers` | off | Label turns `Speaker 1:`, `Speaker 2:` … when more than one person talks. |
 | `--prompt <text>` | — | Extra direction, e.g. names, jargon or acronyms to spell correctly. |
-| `--out <file>` | `<input>.md` | Output transcript path. |
-| `--chunk-minutes <n>` | `10` | Audio split size. |
+| `--out <file>` | `<input-basename>.md` | Output transcript path. |
+| `--chunk-minutes <n>` | `10` | Audio split size, capped at `25` (above that a chunk exceeds the ~20 MB inline request limit). |
 | `--model <id>` | `gemini-3.5-flash` | Model used for transcription. |
 | `--concurrency <n>` | `2` | Parallel API calls. |
 | `--workdir <dir>` | `<out>.chunks/` | Audio + partial-transcript cache (kept between runs to resume). |
@@ -83,7 +83,8 @@ Output goes to `<input-basename>.md` unless you pass `--out`.
 
 - **Long recordings cost time and quota.** A two-hour interview is a dozen API calls. On the free tier you may hit the daily/rate limit — the run stops with the failed chunk numbers; **run the same command again** to resume once quota is back (or enable billing).
 - **The chunk cache** lives at `<out>.chunks/`. Delete it to force a clean re-run.
-- **Speaker labels are per chunk** — the model can't hear across the cut, so "Speaker 1" in chunk 3 isn't guaranteed to be the same person as in chunk 1. For strict diarization across a long file, raise `--chunk-minutes`.
+- **Speaker labels are per chunk** — the model can't hear across the cut, so "Speaker 1" in chunk 3 isn't guaranteed to be the same person as in chunk 1. For stricter diarization, raise `--chunk-minutes` (up to `25`) so there are fewer cuts.
+- **Changing the options re-does the work.** The cache is keyed by the split size, the model and the prompt, so adding `--speakers` (or switching `--lang`) correctly re-transcribes instead of handing back the old text. Re-running the *same* command resumes.
 - **Transcription is verbatim**, including filler words. Ask Claude to clean it up afterwards if you want prose.
 
 Run `node test.mjs` for the self-check on timestamp offsetting.

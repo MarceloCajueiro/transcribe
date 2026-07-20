@@ -54,7 +54,7 @@ Give the user the output path and the word count (printed at the end). Summarize
 - `--speakers` — speaker labels when multiple people talk.
 - `--prompt <text>` — extra direction (names, jargon, spelling).
 - `--out <file>` — output transcript (default: `<input-basename>.md`).
-- `--chunk-minutes <n>` — split size (default: `10`).
+- `--chunk-minutes <n>` — split size (default: `10`, max `25`).
 - `--model`/`--concurrency`/`--workdir`/`--key` — see `--help`.
 
 ## Fixed decisions (unless the user asks otherwise)

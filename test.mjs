@@ -15,6 +15,8 @@ assert.equal(offsetTimestamps('[09:59] a\n[10:00] b', 600), '[19:59] a\n[20:00] 
 assert.equal(offsetTimestamps('[05:00] x', 3600), '[1:05:00] x');
 // already hh:mm:ss input
 assert.equal(offsetTimestamps('[1:00:00] x', 60), '[1:01:00] x');
+// a chunk's own clock can pass 99 minutes
+assert.equal(offsetTimestamps('[105:30] x', 60), '[1:46:30] x');
 // non-timestamp brackets are left alone
 assert.equal(offsetTimestamps('[inaudible] x', 600), '[inaudible] x');
 

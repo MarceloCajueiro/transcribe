@@ -6,7 +6,7 @@
 //
 // See `--help` for options, or the README for the full walkthrough.
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -17,8 +17,13 @@ import { offsetTimestamps, formatTime } from './lib/text.mjs';
 
 const MODEL = 'gemini-3.5-flash';
 const DEFAULT_CHUNK_MINUTES = 10; // keeps each inline request well under the size limit
+// 64 kbps mono ⇒ ~0.48 MB/min, ~0.64 MB/min once base64'd. 25 min ≈ 16 MB, the
+// most that reliably fits the ~20 MB inline request limit.
+const MAX_CHUNK_MINUTES = 25;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const BOOLEAN_FLAGS = new Set(['timestamps', 'speakers', 'help']);
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -26,12 +31,23 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a.startsWith('--')) {
       const key = a.slice(2);
+      // Boolean flags never consume the next token — otherwise
+      // `--timestamps meeting.mp4` would swallow the input file.
+      if (BOOLEAN_FLAGS.has(key)) { args[key] = true; continue; }
       const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) args[key] = true;
-      else { args[key] = next; i++; }
+      if (next === undefined || next.startsWith('--')) throw new Error(`--${key} needs a value`);
+      args[key] = next;
+      i++;
     } else args._.push(a);
   }
   return args;
+}
+
+function number(value, fallback, name) {
+  if (value === undefined) return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`--${name} must be a number (got "${value}")`);
+  return n;
 }
 
 const HELP = `transcribe — audio/video -> text transcript (Gemini STT)
@@ -50,7 +66,7 @@ Options:
   --timestamps       Prefix each paragraph with [mm:ss], offset across chunks.
   --speakers         Label speakers ("Speaker 1:", …) when more than one talks.
   --prompt <text>    Extra direction, e.g. names/jargon to spell correctly.
-  --chunk-minutes <n>  Audio split size (default: ${DEFAULT_CHUNK_MINUTES}).
+  --chunk-minutes <n>  Audio split size (default: ${DEFAULT_CHUNK_MINUTES}, max ${MAX_CHUNK_MINUTES}).
   --model <id>       STT model (default: ${MODEL}).
   --key <ENV_VAR>    Env var holding the API key (default: GEMINI_API_KEY).
                      Falls back to ~/.env if not set in the environment.
@@ -126,8 +142,12 @@ async function main() {
   const out = resolve(args.out || `${basename(input, extname(input))}.md`);
   const workdir = resolve(args.workdir || `${out}.chunks`);
   const model = args.model || MODEL;
-  const concurrency = Math.max(1, Number(args.concurrency ?? 2));
-  const chunkSeconds = Math.max(60, Number(args['chunk-minutes'] ?? DEFAULT_CHUNK_MINUTES) * 60);
+  const concurrency = Math.max(1, number(args.concurrency, 2, 'concurrency'));
+  const chunkMinutes = number(args['chunk-minutes'], DEFAULT_CHUNK_MINUTES, 'chunk-minutes');
+  const chunkSeconds = Math.min(MAX_CHUNK_MINUTES, Math.max(1, chunkMinutes)) * 60;
+  if (chunkMinutes > MAX_CHUNK_MINUTES) {
+    console.log(`[transcribe] --chunk-minutes capped at ${MAX_CHUNK_MINUTES} (inline request size limit).`);
+  }
   const keyVar = args.key || 'GEMINI_API_KEY';
   const maxRetries = 5;
 
@@ -146,7 +166,9 @@ async function main() {
   mkdirSync(workdir, { recursive: true });
 
   console.log(`[transcribe] splitting into ${chunkSeconds / 60}-minute chunks…`);
-  const audioChunks = splitAudio(input, workdir, chunkSeconds);
+  // The prompt and model fingerprint the transcript: change either and the
+  // cached chunk transcripts no longer describe what was asked for.
+  const audioChunks = splitAudio(input, workdir, chunkSeconds, `${model}\n${prompt}`);
   console.log(`[transcribe] ${audioChunks.length} chunk(s).`);
 
   const t0 = Date.now();
@@ -164,11 +186,18 @@ async function main() {
       try {
         console.log(`[transcribe] chunk ${n}/${audioChunks.length}, attempt ${attempt}…`);
         const text = await sttSingle({ file: audio, prompt, model, apiKey, timeoutMs });
-        writeFileSync(cached, text);
+        // Write-then-rename: a half-written cache file would be reused as if
+        // it were the whole chunk on the next run.
+        writeFileSync(`${cached}.tmp`, text);
+        renameSync(`${cached}.tmp`, cached);
         return text;
       } catch (e) {
         console.log(`[transcribe] chunk ${n} attempt ${attempt} failed: ${e.message.slice(0, 120)}`);
-        await sleep(3000 * attempt); // backoff (also eases transient 429s)
+        if (e.fatal) {
+          console.log(`[transcribe] chunk ${n}: not retrying (the request itself is rejected).`);
+          break;
+        }
+        if (attempt < maxRetries) await sleep(3000 * attempt); // backoff (also eases transient 429s)
       }
     }
     failures.push(n);
@@ -182,8 +211,16 @@ async function main() {
   }
 
   // Each chunk was timestamped from its own zero — shift it to absolute time.
+  // Offsets come from the chunks' measured durations, not the nominal split
+  // size: ffmpeg cuts on frame boundaries, so the two drift apart.
+  let elapsed = 0;
   const transcript = texts
-    .map((t, i) => (args.timestamps ? offsetTimestamps(t.trim(), i * chunkSeconds) : t.trim()))
+    .map((t, i) => {
+      if (!args.timestamps) return t.trim();
+      const shifted = offsetTimestamps(t.trim(), elapsed);
+      elapsed += probeDuration(audioChunks[i]);
+      return shifted;
+    })
     .join('\n\n');
   writeFileSync(out, `${transcript}\n`);
 
