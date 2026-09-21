@@ -2,7 +2,7 @@
 // Self-check for the only non-trivial pure logic here: timestamp offsetting.
 //   node test.mjs
 import assert from 'node:assert/strict';
-import { offsetTimestamps, formatTime } from './lib/text.mjs';
+import { offsetTimestamps, formatTime } from './skills/transcribe/lib/text.mjs';
 
 assert.equal(formatTime(0), '00:00');
 assert.equal(formatTime(65), '01:05');

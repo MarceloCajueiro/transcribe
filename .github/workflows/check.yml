@@ -1,0 +1,31 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  skill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The skill is installed by copying skills/transcribe/ into the harness, so the
+      # frontmatter has to satisfy the Agent Skills spec and the whole implementation
+      # has to live inside that directory.
+      - name: SKILL.md matches the Agent Skills spec
+        run: python3 scripts/check-skills.py
+
+      - name: Scripts parse
+        run: |
+          for f in skills/transcribe/transcribe.mjs skills/transcribe/lib/*.mjs test.mjs; do
+            node --check "$f"
+          done
+
+      - name: Timestamp offsetting self-check
+        run: node test.mjs
+
+      - name: Implementation is inside the skill directory
+        run: test -f skills/transcribe/transcribe.mjs && test -d skills/transcribe/lib

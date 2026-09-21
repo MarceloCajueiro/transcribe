@@ -23,7 +23,7 @@ retry, and resume) → timestamp offsetting → join.
 - `ffmpeg` + `ffprobe` (`brew install ffmpeg`).
 - A **Gemini API key** in `GEMINI_API_KEY` (environment or `~/.env`). Get one at https://aistudio.google.com/apikey.
 
-The script lives at the plugin root. Reference it with `${CLAUDE_PLUGIN_ROOT}`.
+The script ships inside this skill, next to this file. Run it with the path of the directory this SKILL.md was loaded from - that path is already known and always correct.
 
 ## Steps
 
@@ -40,7 +40,8 @@ Ask the user (or infer from context) which **language** is spoken, and pass it a
 
 ### 4. Run it
 ```bash
-node ${CLAUDE_PLUGIN_ROOT}/transcribe.mjs <input> --lang <language> [--timestamps] [--speakers] [--out <file.md>]
+# SKILL_DIR = the directory holding this SKILL.md, i.e. the one you just read
+node "$SKILL_DIR/transcribe.mjs" <input> --lang <language> [--timestamps] [--speakers] [--out <file.md>]
 ```
 For a **long** recording (dozens of chunks), warn the user it can take a while and may hit the free-tier rate limit — if it stops with failures, just run the **same command again** to resume.
 

@@ -13,7 +13,7 @@ rate limit you just run it again and it resumes.
 - 🗣️ Optional **speaker labels** for interviews and meetings
 - ♻️ **Resumable** — per-chunk cache; re-run to pick up where it stopped
 - 📦 **Zero npm dependencies** — native `fetch` + the system `ffmpeg`
-- 🤖 Installable as a [Claude Code](https://docs.claude.com/en/docs/claude-code) skill
+- 🤖 **Installs as an Agent Skill** in any harness — Claude Code, pi, Codex, Cursor, Gemini CLI, ...
 
 The mirror image of [narrate](https://github.com/MarceloCajueiro/narrate) (document → narrated audio).
 
@@ -40,13 +40,13 @@ git clone https://github.com/MarceloCajueiro/transcribe.git
 cd transcribe
 
 # Transcribe an interview in Brazilian Portuguese, with speaker labels
-node transcribe.mjs interview.m4a --lang pt-BR --speakers
+node skills/transcribe/transcribe.mjs interview.m4a --lang pt-BR --speakers
 
 # A lecture video, with timestamps, to a specific output file
-node transcribe.mjs lecture.mp4 --lang English --timestamps --out lecture.md
+node skills/transcribe/transcribe.mjs lecture.mp4 --lang English --timestamps --out lecture.md
 
 # Just the text, language auto-detected
-node transcribe.mjs voice-memo.m4a
+node skills/transcribe/transcribe.mjs voice-memo.m4a
 ```
 
 Output goes to `<input-basename>.md` unless you pass `--out`.
@@ -91,14 +91,15 @@ Run `node test.mjs` for the self-check on timestamp offsetting.
 
 ---
 
-## Install as a Claude Code skill
+## Install as an Agent Skill
 
-```
-/plugin marketplace add MarceloCajueiro/claude-plugins
-/plugin install transcribe@cajueiro-plugins
+```bash
+npx skills add MarceloCajueiro/transcribe
 ```
 
-Then ask Claude to "transcribe this interview in Portuguese" and it will drive the tool.
+The [skills.sh](https://skills.sh) CLI asks which harness to install into — Claude Code, pi, Codex, Cursor, Gemini CLI and the rest. It copies the **whole skill directory**, so `transcribe.mjs` and its `lib/` travel with it and there is nothing else to install. Then ask your agent to "transcribe this interview in Portuguese" and it drives the tool.
+
+The same script also runs standalone from a clone, as in the quick start above.
 
 ---
 
